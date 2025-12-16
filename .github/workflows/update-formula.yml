@@ -1,6 +1,6 @@
 name: Update Formula
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       version:

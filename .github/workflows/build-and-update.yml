@@ -1,6 +1,6 @@
 name: Build and Update
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       version:
