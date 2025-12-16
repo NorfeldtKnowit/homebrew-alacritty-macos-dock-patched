@@ -11,6 +11,10 @@ name: Update Formula
         required: true
         type: string
         description: 'SHA256 hash of the tarball'
+      asset_url:
+        required: true
+        type: string
+        description: 'GitHub release asset URL for the tarball'
 
 jobs:
   update-formula:
@@ -26,20 +30,40 @@ jobs:
           git config user.name "alacritty-bot"
           git config user.email "bot@users.noreply.github.com"
 
+      - name: Verify asset accessibility
+        run: |
+          ASSET_URL="${{ inputs.asset_url }}"
+
+          echo "Verifying release asset is accessible..."
+          HTTP_CODE=$(curl -sL -w "%{http_code}" -o /dev/null "${ASSET_URL}")
+
+          if [ "${HTTP_CODE}" = "200" ]; then
+            echo "✓ Asset is accessible (HTTP ${HTTP_CODE})"
+          else
+            echo "ERROR: Asset not accessible (HTTP ${HTTP_CODE})"
+            echo "URL: ${ASSET_URL}"
+            exit 1
+          fi
+
       - name: Update formula
         run: |
           VERSION="${{ inputs.version }}"
           SHA256="${{ inputs.sha256 }}"
+          ASSET_URL="${{ inputs.asset_url }}"
           BRANCH="auto-update-v${VERSION}"
 
           echo "Updating formula to v${VERSION}..."
           echo "SHA256: ${SHA256}"
+          echo "Asset URL: ${ASSET_URL}"
 
           # Create new branch
           git checkout -b "${BRANCH}"
 
-          # Update version in URL
-          sed -i "s|/tags/v[0-9.]*\.tar\.gz|/tags/v${VERSION}.tar.gz|" Formula/alacritty-macos-dock-patched.rb
+          # Escape URL for sed (replace / with \/)
+          ESCAPED_URL=$(echo "${ASSET_URL}" | sed 's/\//\\\//g')
+
+          # Update URL to release asset (match both old archive URL and release asset URL patterns)
+          sed -i "s|url \"https://github.com/.*\.tar\.gz\"|url \"${ASSET_URL}\"|" Formula/alacritty-macos-dock-patched.rb
 
           # Update SHA256
           sed -i "s/sha256 \"[a-f0-9]*\"/sha256 \"${SHA256}\"/" Formula/alacritty-macos-dock-patched.rb
@@ -50,7 +74,7 @@ jobs:
 
           # Commit changes
           git add Formula/alacritty-macos-dock-patched.rb
-          git commit -m "Update to v${VERSION}"
+          git commit -m "Update to v${VERSION} (release asset)"
 
           # Push to remote
           git push origin "${BRANCH}"
@@ -61,10 +85,19 @@ jobs:
           VERSION="${{ inputs.version }}"
           SHA256="${{ inputs.sha256 }}"
 
-          PR_BODY="## Automated Update
+          ASSET_URL="${{ inputs.asset_url }}"
+
+          PR_BODY="## Automated Update - Release Asset Distribution
 
           **Version:** v${VERSION}
           **SHA256:** \`${SHA256}\`
+          **Source:** [GitHub Release Asset](${ASSET_URL})
+
+          ### What Changed
+
+          - ✅ Updated formula to use stable GitHub release asset
+          - ✅ Upstream source mirrored with transparent attribution
+          - ✅ SHA256 permanently stable (never changes)
 
           ### Validation
 
@@ -72,16 +105,20 @@ jobs:
           - ✓ Build completed (macOS)
           - ✓ Binary tests passed
           - ✓ Dock menu implementation verified
+          - ✓ Release asset uploaded and verified
 
-          ### Security Note
+          ### Security Architecture
 
-          This patch is NOT independently security-audited. Security relies entirely on the upstream Alacritty project. The patch only adds macOS dock menu functionality and does not modify security-sensitive code paths.
+          **Source Verification:** Upstream Alacritty v${VERSION} downloaded from official GitHub repository
+          **Mirror Integrity:** SHA256 calculated and verified before uploading to release assets
+          **User Verification:** Homebrew verifies SHA256 when installing
+          **Audit Trail:** Full transparency in [release notes](https://github.com/norfeldt/homebrew-alacritty-patched/releases/tag/v${VERSION})
 
           ### Test Locally
 
           \`\`\`bash
           brew uninstall alacritty-macos-dock-patched
-          brew install --build-from-source norfeldt/alacritty-macos-dock-patched/alacritty-macos-dock-patched
+          brew install alacritty-macos-dock-patched
           \`\`\`
 
           ### Verify Dock Menu

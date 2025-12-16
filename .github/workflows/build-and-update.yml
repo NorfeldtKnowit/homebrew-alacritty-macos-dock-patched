@@ -79,13 +79,14 @@ jobs:
           path: alacritty-${{ inputs.version }}/target/release/osx/Alacritty.app
           retention-days: 30
 
-      - name: Trigger formula update
+      - name: Trigger release asset upload
         if: success()
         run: |
-          gh workflow run update-formula.yml \
+          gh workflow run release-asset-upload.yml \
             -f version="${{ inputs.version }}" \
-            -f sha256="${{ steps.build.outputs.sha256 }}"
-          echo "✓ Triggered formula update workflow"
+            -f sha256="${{ steps.build.outputs.sha256 }}" \
+            -f patch_compatible="true"
+          echo "✓ Triggered release asset upload workflow"
         env:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
 
