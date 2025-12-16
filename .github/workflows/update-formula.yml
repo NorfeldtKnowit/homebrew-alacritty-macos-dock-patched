@@ -1,0 +1,118 @@
+name: Update Formula
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: 'Alacritty version (e.g., 0.16.1)'
+      sha256:
+        required: true
+        type: string
+        description: 'SHA256 hash of the tarball'
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
+
+      - name: Configure git
+        run: |
+          git config user.name "alacritty-bot"
+          git config user.email "bot@users.noreply.github.com"
+
+      - name: Update formula
+        run: |
+          VERSION="${{ inputs.version }}"
+          SHA256="${{ inputs.sha256 }}"
+          BRANCH="auto-update-v${VERSION}"
+
+          echo "Updating formula to v${VERSION}..."
+          echo "SHA256: ${SHA256}"
+
+          # Create new branch
+          git checkout -b "${BRANCH}"
+
+          # Update version in URL
+          sed -i "s|/tags/v[0-9.]*\.tar\.gz|/tags/v${VERSION}.tar.gz|" Formula/alacritty-patched.rb
+
+          # Update SHA256
+          sed -i "s/sha256 \"[a-f0-9]*\"/sha256 \"${SHA256}\"/" Formula/alacritty-patched.rb
+
+          # Verify changes
+          echo "Changes made:"
+          git diff Formula/alacritty-patched.rb
+
+          # Commit changes
+          git add Formula/alacritty-patched.rb
+          git commit -m "Update to v${VERSION}"
+
+          # Push to remote
+          git push origin "${BRANCH}"
+
+      - name: Create PR
+        run: |
+          VERSION="${{ inputs.version }}"
+          SHA256="${{ inputs.sha256 }}"
+
+          gh pr create \
+            --title "Update to v${VERSION}" \
+            --body "## Automated Update
+
+**Version:** v${VERSION}
+**SHA256:** \`${SHA256}\`
+
+### Validation
+
+- ✓ Patch applied successfully
+- ✓ Build completed (macOS)
+- ✓ Binary tests passed
+- ✓ Dock menu implementation verified
+
+### Test Locally
+
+\`\`\`bash
+brew uninstall alacritty-patched
+brew install --build-from-source norfeldt/alacritty-patched/alacritty-patched
+\`\`\`
+
+### Verify Dock Menu
+
+1. Launch the patched Alacritty
+2. Open multiple windows
+3. Right-click the dock icon
+4. Confirm all windows appear in the dock menu
+
+Ready for review and merge." \
+            --label "automated-update"
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
+
+      - name: Create failure issue
+        if: failure()
+        run: |
+          gh issue create \
+            --title "⚠️ Formula update failed for v${{ inputs.version }}" \
+            --label "update-failure" \
+            --body "## Formula Update Failure
+
+Failed to update formula for Alacritty v${{ inputs.version }}.
+
+### Workflow Details
+- **Run ID**: ${{ github.run_id }}
+- **Logs**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+- **SHA256**: \`${{ inputs.sha256 }}\`
+
+### Possible Causes
+- Git configuration issues
+- Permission problems
+- Formula syntax errors
+
+This requires manual intervention to complete the update."
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}

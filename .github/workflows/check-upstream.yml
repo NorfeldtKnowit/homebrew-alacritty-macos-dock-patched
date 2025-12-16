@@ -1,0 +1,90 @@
+name: Check Upstream Releases
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-patch-compatibility:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get versions
+        id: versions
+        run: |
+          CURRENT=$(grep -oE 'url ".*\/v[0-9.]+\.tar\.gz"' Formula/alacritty-patched.rb | grep -oE '[0-9.]+')
+          brew install gh
+          LATEST=$(gh api repos/alacritty/alacritty/releases/latest --jq '.tag_name' | sed 's/^v//')
+
+          echo "Current version: $CURRENT"
+          echo "Latest version: $LATEST"
+
+          if [ "$LATEST" != "$CURRENT" ]; then
+            echo "version=$LATEST" >> $GITHUB_OUTPUT
+            echo "has_new=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_new=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Test patch compatibility
+        if: steps.versions.outputs.has_new == 'true'
+        run: |
+          VERSION="${{ steps.versions.outputs.version }}"
+          echo "Testing patch compatibility with v${VERSION}..."
+
+          curl -L "https://github.com/alacritty/alacritty/archive/refs/tags/v${VERSION}.tar.gz" -o "v${VERSION}.tar.gz"
+          tar -xzf "v${VERSION}.tar.gz"
+          cd "alacritty-${VERSION}"
+
+          # Dry-run test
+          if ! patch -p1 --dry-run < ../alacritty-dock-menu.patch; then
+            echo "Patch failed to apply to v${VERSION}"
+            gh issue create \
+              --title "⚠️ Patch incompatible with v${VERSION}" \
+              --label "patch-failure" \
+              --body "## Patch Compatibility Failure
+
+The alacritty-dock-menu.patch failed to apply to Alacritty v${VERSION}.
+
+This likely means Alacritty has refactored the code that our patch modifies. Manual intervention is required to update the patch.
+
+### Files modified by the patch:
+- alacritty/Cargo.toml
+- alacritty/src/macos/mod.rs
+- alacritty/src/main.rs
+
+### Next steps:
+1. Clone Alacritty v${VERSION}
+2. Manually apply the changes from our patch
+3. Create a new patch file
+4. Update the formula
+
+See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+            exit 1
+          fi
+
+          # Apply and validate
+          patch -p1 < ../alacritty-dock-menu.patch
+
+          # Verify key function exists in patched file
+          if ! grep -q "setup_dock_menu" alacritty/src/macos/mod.rs; then
+            echo "ERROR: setup_dock_menu function not found after patching"
+            exit 1
+          fi
+
+          echo "✓ Patch applied successfully to v${VERSION}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Trigger build
+        if: success() && steps.versions.outputs.has_new == 'true'
+        run: |
+          gh workflow run build-and-update.yml \
+            -f version="${{ steps.versions.outputs.version }}"
+          echo "✓ Triggered build workflow for v${{ steps.versions.outputs.version }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,113 @@
+name: Build and Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: 'Alacritty version to build (e.g., 0.16.1)'
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install rust scdoc
+
+      - name: Build patched version
+        id: build
+        run: |
+          VERSION="${{ inputs.version }}"
+          echo "Building Alacritty v${VERSION} with dock menu patch..."
+
+          # Download source
+          curl -L "https://github.com/alacritty/alacritty/archive/refs/tags/v${VERSION}.tar.gz" -o "v${VERSION}.tar.gz"
+
+          # Calculate SHA256
+          SHA256=$(shasum -a 256 "v${VERSION}.tar.gz" | cut -d' ' -f1)
+          echo "sha256=${SHA256}" >> $GITHUB_OUTPUT
+          echo "SHA256: ${SHA256}"
+
+          # Extract and patch
+          tar -xzf "v${VERSION}.tar.gz"
+          cd "alacritty-${VERSION}"
+
+          echo "Applying patch..."
+          patch -p1 < ../alacritty-dock-menu.patch
+
+          # Build
+          echo "Building application..."
+          make app
+
+      - name: Test binary
+        run: |
+          VERSION="${{ inputs.version }}"
+          BINARY="alacritty-${VERSION}/target/release/osx/Alacritty.app/Contents/MacOS/alacritty"
+
+          # Check binary exists and is executable
+          if [ ! -x "$BINARY" ]; then
+            echo "ERROR: Binary not found or not executable: $BINARY"
+            exit 1
+          fi
+
+          # Test version
+          echo "Testing binary version..."
+          "$BINARY" --version | tee /tmp/version.txt
+          if ! grep -q "${VERSION}" /tmp/version.txt; then
+            echo "ERROR: Version mismatch"
+            exit 1
+          fi
+
+          # Verify dock menu code is present
+          echo "Verifying dock menu implementation..."
+          if ! strings "$BINARY" | grep -q "applicationDockMenu"; then
+            echo "ERROR: Dock menu implementation not found in binary"
+            exit 1
+          fi
+
+          echo "✓ Binary tests passed"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alacritty-patched-${{ inputs.version }}
+          path: alacritty-${{ inputs.version }}/target/release/osx/Alacritty.app
+          retention-days: 30
+
+      - name: Trigger formula update
+        if: success()
+        run: |
+          gh workflow run update-formula.yml \
+            -f version="${{ inputs.version }}" \
+            -f sha256="${{ steps.build.outputs.sha256 }}"
+          echo "✓ Triggered formula update workflow"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create failure issue
+        if: failure()
+        run: |
+          gh issue create \
+            --title "🔨 Build failed for v${{ inputs.version }}" \
+            --label "build-failure" \
+            --body "## Build Failure
+
+Build or testing failed for Alacritty v${{ inputs.version }}.
+
+### Workflow Details
+- **Run ID**: ${{ github.run_id }}
+- **Logs**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+### Next Steps
+1. Review the workflow logs for error details
+2. Check if Alacritty made breaking changes
+3. Update the build process if needed
+
+This may require manual intervention to fix the build configuration or dependencies."
+        env:
+          GH_TOKEN: ${{ github.token }}
