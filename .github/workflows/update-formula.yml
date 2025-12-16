@@ -39,23 +39,24 @@ jobs:
           git checkout -b "${BRANCH}"
 
           # Update version in URL
-          sed -i "s|/tags/v[0-9.]*\.tar\.gz|/tags/v${VERSION}.tar.gz|" Formula/alacritty-patched.rb
+          sed -i "s|/tags/v[0-9.]*\.tar\.gz|/tags/v${VERSION}.tar.gz|" Formula/alacritty-macos-dock-patched.rb
 
           # Update SHA256
-          sed -i "s/sha256 \"[a-f0-9]*\"/sha256 \"${SHA256}\"/" Formula/alacritty-patched.rb
+          sed -i "s/sha256 \"[a-f0-9]*\"/sha256 \"${SHA256}\"/" Formula/alacritty-macos-dock-patched.rb
 
           # Verify changes
           echo "Changes made:"
-          git diff Formula/alacritty-patched.rb
+          git diff Formula/alacritty-macos-dock-patched.rb
 
           # Commit changes
-          git add Formula/alacritty-patched.rb
+          git add Formula/alacritty-macos-dock-patched.rb
           git commit -m "Update to v${VERSION}"
 
           # Push to remote
           git push origin "${BRANCH}"
 
       - name: Create PR
+        id: create_pr
         run: |
           VERSION="${{ inputs.version }}"
           SHA256="${{ inputs.sha256 }}"
@@ -74,11 +75,15 @@ jobs:
 - ✓ Binary tests passed
 - ✓ Dock menu implementation verified
 
+### Security Note
+
+This patch is NOT independently security-audited. Security relies entirely on the upstream Alacritty project. The patch only adds macOS dock menu functionality and does not modify security-sensitive code paths.
+
 ### Test Locally
 
 \`\`\`bash
-brew uninstall alacritty-patched
-brew install --build-from-source norfeldt/alacritty-patched/alacritty-patched
+brew uninstall alacritty-macos-dock-patched
+brew install --build-from-source norfeldt/alacritty-macos-dock-patched/alacritty-macos-dock-patched
 \`\`\`
 
 ### Verify Dock Menu
@@ -88,8 +93,20 @@ brew install --build-from-source norfeldt/alacritty-patched/alacritty-patched
 3. Right-click the dock icon
 4. Confirm all windows appear in the dock menu
 
-Ready for review and merge." \
-            --label "automated-update"
+This PR will auto-merge after all checks pass." \
+            --label "automated-update" | tee /tmp/pr_url.txt
+
+          # Extract PR number
+          PR_URL=$(cat /tmp/pr_url.txt)
+          echo "pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
+
+      - name: Enable auto-merge
+        run: |
+          # Enable auto-merge with squash strategy
+          gh pr merge "${{ steps.create_pr.outputs.pr_url }}" --auto --squash
+          echo "✓ Auto-merge enabled - PR will merge automatically when checks pass"
         env:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
 

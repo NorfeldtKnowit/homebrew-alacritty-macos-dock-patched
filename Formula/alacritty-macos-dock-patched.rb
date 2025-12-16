@@ -1,8 +1,8 @@
-class AlacrittyPatched < Formula
+class AlacrittyMacosDockPatched < Formula
   desc "GPU-accelerated terminal emulator (with macOS dock menu)"
   homepage "https://github.com/alacritty/alacritty"
-  url "https://github.com/alacritty/alacritty/archive/refs/tags/v0.16.1.tar.gz"
-  sha256 "b7240df4a52c004470977237a276185fc97395d59319480d67cad3c4347f395e"
+  url "https://github.com/alacritty/alacritty/archive/refs/tags/v0.13.2.tar.gz"
+  sha256 "e9a54aabc92bbdc25ab1659c2e5a1e9b76f27d101342c8219cc98a730fd46d90"
   license "Apache-2.0"
 
   depends_on "rust" => :build
