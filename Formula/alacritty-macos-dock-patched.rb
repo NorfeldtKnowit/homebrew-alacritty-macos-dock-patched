@@ -1,7 +1,10 @@
 class AlacrittyMacosDockPatched < Formula
   desc "GPU-accelerated terminal emulator (with macOS dock menu)"
   homepage "https://github.com/alacritty/alacritty"
-  url "https://github.com/alacritty/alacritty/archive/refs/tags/v0.16.1.tar.gz"
+
+  # Source: Alacritty v0.16.1 (https://github.com/alacritty/alacritty/releases/tag/v0.16.1)
+  # Mirrored as GitHub release asset for stable SHA256 distribution
+  url "https://github.com/NorfeldtKnowit/homebrew-alacritty-macos-dock-patched/releases/download/v0.16.1/alacritty-v0.16.1.tar.gz"
   sha256 "b7240df4a52c004470977237a276185fc97395d59319480d67cad3c4347f395e"
   license "Apache-2.0"
 

@@ -1,0 +1,276 @@
+name: Release Asset Upload
+
+"on":
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: 'Alacritty version (e.g., 0.16.1)'
+      sha256:
+        required: true
+        type: string
+        description: 'SHA256 hash of the upstream tarball'
+      patch_compatible:
+        required: false
+        type: boolean
+        default: true
+        description: 'Whether patch applied successfully'
+
+jobs:
+  create-release-asset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download upstream tarball
+        id: download
+        run: |
+          VERSION="${{ inputs.version }}"
+          EXPECTED_SHA256="${{ inputs.sha256 }}"
+
+          echo "Downloading Alacritty v${VERSION} tarball..."
+          curl -L "https://github.com/alacritty/alacritty/archive/refs/tags/v${VERSION}.tar.gz" \
+            -o "alacritty-v${VERSION}.tar.gz"
+
+          # Verify SHA256
+          ACTUAL_SHA256=$(shasum -a 256 "alacritty-v${VERSION}.tar.gz" | cut -d' ' -f1)
+          echo "Expected SHA256: ${EXPECTED_SHA256}"
+          echo "Actual SHA256:   ${ACTUAL_SHA256}"
+
+          if [ "${ACTUAL_SHA256}" != "${EXPECTED_SHA256}" ]; then
+            echo "ERROR: SHA256 mismatch detected!"
+            echo "This means GitHub regenerated the tarball between build and release."
+            echo "The release will use the ACTUAL SHA256: ${ACTUAL_SHA256}"
+            echo "sha256_mismatch=true" >> $GITHUB_OUTPUT
+            echo "actual_sha256=${ACTUAL_SHA256}" >> $GITHUB_OUTPUT
+          else
+            echo "✓ SHA256 verified successfully"
+            echo "sha256_mismatch=false" >> $GITHUB_OUTPUT
+            echo "actual_sha256=${ACTUAL_SHA256}" >> $GITHUB_OUTPUT
+          fi
+
+          # Store for release notes
+          echo "asset_file=alacritty-v${VERSION}.tar.gz" >> $GITHUB_OUTPUT
+
+      - name: Check if release exists
+        id: check_release
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          if gh release view "v${VERSION}" &>/dev/null; then
+            echo "Release v${VERSION} already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+
+            # Check if asset already exists
+            if gh release view "v${VERSION}" --json assets --jq '.assets[].name' | grep -q "alacritty-v${VERSION}.tar.gz"; then
+              echo "Asset already exists in release"
+              echo "asset_exists=true" >> $GITHUB_OUTPUT
+            else
+              echo "Release exists but asset missing"
+              echo "asset_exists=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Release does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "asset_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
+
+      - name: Create or update release
+        id: create_release
+        run: |
+          VERSION="${{ inputs.version }}"
+          SHA256="${{ steps.download.outputs.actual_sha256 }}"
+          PATCH_STATUS="${{ inputs.patch_compatible && '✓ Compatible' || '⚠ Requires update' }}"
+          SHA256_STATUS="${{ steps.download.outputs.sha256_mismatch == 'true' && '⚠ SHA256 updated' || '✓ SHA256 verified' }}"
+
+          # Build release notes
+          RELEASE_NOTES="## Alacritty v${VERSION} with macOS Dock Menu Patch
+
+### Source Attribution
+
+This release mirrors the upstream Alacritty v${VERSION} source with an applied patch for macOS dock menu functionality.
+
+- **Upstream Release**: [alacritty/alacritty v${VERSION}](https://github.com/alacritty/alacritty/releases/tag/v${VERSION})
+- **License**: Apache 2.0 (preserved from upstream)
+- **Patch Status**: ${PATCH_STATUS}
+
+### Security Verification
+
+**SHA256 Checksum**: \`${SHA256}\`
+
+${SHA256_STATUS}
+
+This checksum is calculated from the upstream Alacritty tarball and verified before upload. Once uploaded as a release asset, this checksum becomes permanent and stable.
+
+\`\`\`bash
+# Verify manually
+curl -sL \"https://github.com/norfeldt/homebrew-alacritty-patched/releases/download/v${VERSION}/alacritty-v${VERSION}.tar.gz\" | shasum -a 256
+# Should output: ${SHA256}
+\`\`\`
+
+### Homebrew Installation
+
+\`\`\`bash
+brew tap norfeldt/alacritty-patched
+brew install alacritty-macos-dock-patched
+\`\`\`
+
+### What's Patched
+
+This version includes a patch that adds native macOS dock menu support:
+- Right-click the Alacritty icon in the dock to see all open windows
+- Click a window in the menu to bring it to front
+- Native macOS integration following Apple's Human Interface Guidelines
+
+The patch modifies:
+- \`alacritty/Cargo.toml\` - Adds Objective-C runtime dependencies
+- \`alacritty/src/macos/mod.rs\` - Implements dock menu using macOS APIs
+- \`alacritty/src/main.rs\` - Initializes dock menu on startup
+
+### Mirroring Policy
+
+This tap mirrors upstream Alacritty source tarballs as GitHub release assets to provide stable SHA256 checksums for Homebrew formula verification. We do not modify the upstream source beyond applying the documented patch.
+
+**Transparency**: All changes are visible in the patch file at [\`alacritty-dock-menu.patch\`](https://github.com/norfeldt/homebrew-alacritty-patched/blob/main/alacritty-dock-menu.patch)
+
+---
+
+**Build Verification**: Automated macOS build completed successfully
+**Distribution**: Stable SHA256 via GitHub Release Assets"
+
+          # Create or update release
+          if [ "${{ steps.check_release.outputs.exists }}" = "true" ]; then
+            echo "Updating existing release v${VERSION}..."
+            gh release edit "v${VERSION}" --notes "$RELEASE_NOTES"
+          else
+            echo "Creating new release v${VERSION}..."
+            gh release create "v${VERSION}" \
+              --title "Alacritty v${VERSION} (macOS Dock Menu)" \
+              --notes "$RELEASE_NOTES"
+          fi
+
+          # Store asset URL for next workflow
+          ASSET_URL="https://github.com/norfeldt/homebrew-alacritty-patched/releases/download/v${VERSION}/alacritty-v${VERSION}.tar.gz"
+          echo "asset_url=${ASSET_URL}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
+
+      - name: Upload tarball as release asset
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          # Upload asset (--clobber overwrites if exists)
+          if [ "${{ steps.check_release.outputs.asset_exists }}" = "true" ]; then
+            echo "Removing existing asset..."
+            gh release delete-asset "v${VERSION}" "alacritty-v${VERSION}.tar.gz" --yes
+          fi
+
+          echo "Uploading tarball as release asset..."
+          gh release upload "v${VERSION}" "alacritty-v${VERSION}.tar.gz"
+
+          echo "✓ Asset uploaded successfully"
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
+
+      - name: Verify asset accessibility
+        run: |
+          ASSET_URL="${{ steps.create_release.outputs.asset_url }}"
+
+          echo "Verifying asset is publicly accessible..."
+          HTTP_CODE=$(curl -sL -w "%{http_code}" -o /dev/null "${ASSET_URL}")
+
+          if [ "${HTTP_CODE}" = "200" ]; then
+            echo "✓ Asset is accessible (HTTP ${HTTP_CODE})"
+          else
+            echo "ERROR: Asset not accessible (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+
+          # Verify SHA256 of uploaded asset
+          UPLOADED_SHA256=$(curl -sL "${ASSET_URL}" | shasum -a 256 | cut -d' ' -f1)
+          EXPECTED_SHA256="${{ steps.download.outputs.actual_sha256 }}"
+
+          if [ "${UPLOADED_SHA256}" = "${EXPECTED_SHA256}" ]; then
+            echo "✓ Uploaded asset SHA256 verified"
+          else
+            echo "ERROR: Uploaded asset SHA256 mismatch"
+            echo "Expected: ${EXPECTED_SHA256}"
+            echo "Got:      ${UPLOADED_SHA256}"
+            exit 1
+          fi
+
+      - name: Trigger formula update
+        if: success()
+        run: |
+          VERSION="${{ inputs.version }}"
+          SHA256="${{ steps.download.outputs.actual_sha256 }}"
+          ASSET_URL="${{ steps.create_release.outputs.asset_url }}"
+
+          echo "Triggering formula update with release asset..."
+          gh workflow run update-formula.yml \
+            -f version="${VERSION}" \
+            -f sha256="${SHA256}" \
+            -f asset_url="${ASSET_URL}"
+
+          echo "✓ Formula update triggered"
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
+
+      - name: Post summary
+        if: always()
+        run: |
+          VERSION="${{ inputs.version }}"
+          SHA256="${{ steps.download.outputs.actual_sha256 }}"
+          MISMATCH="${{ steps.download.outputs.sha256_mismatch }}"
+
+          echo "## Release Asset Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: v${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "**SHA256**: \`${SHA256}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Release URL**: https://github.com/norfeldt/homebrew-alacritty-patched/releases/tag/v${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${MISMATCH}" = "true" ]; then
+            echo "⚠️ **SHA256 Mismatch Detected**: GitHub regenerated the tarball. Using actual SHA256." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **SHA256 Verified**: Matches build-time calculation" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create failure issue
+        if: failure()
+        run: |
+          ISSUE_BODY="## Release Asset Upload Failure
+
+          Failed to create GitHub release or upload asset for Alacritty v${{ inputs.version }}.
+
+          ### Workflow Details
+          - **Run ID**: ${{ github.run_id }}
+          - **Logs**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - **Version**: v${{ inputs.version }}
+          - **Expected SHA256**: \`${{ inputs.sha256 }}\`
+
+          ### Possible Causes
+          - GitHub API rate limiting
+          - Permission issues with TAP_UPDATE_TOKEN
+          - Network connectivity problems
+          - Asset already exists (check release page)
+
+          ### Next Steps
+          1. Review the workflow logs
+          2. Verify GitHub token permissions
+          3. Check if release already exists
+          4. Retry manually if needed
+
+          This requires manual intervention to complete the release asset upload."
+
+          gh issue create \
+            --title "⚠️ Release asset upload failed for v${{ inputs.version }}" \
+            --body "$ISSUE_BODY" \
+            --label "automation"
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
