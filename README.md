@@ -2,6 +2,9 @@
 
 A Homebrew tap that provides Alacritty with macOS dock menu support, similar to Terminal.app and iTerm2.
 
+<img width="287" height="335" alt="Screenshot 2025-12-16 at 22 24 20" src="https://github.com/user-attachments/assets/58ecdc4f-8e5a-4e5a-ae1b-1146bb5b0db3" />
+
+
 ## Security Disclaimer
 
 **IMPORTANT**: This patch is NOT independently security-audited. Security relies entirely on the upstream [Alacritty project](https://github.com/alacritty/alacritty). The patch only adds macOS dock menu functionality using Objective-C runtime APIs and does not modify security-sensitive code paths.
