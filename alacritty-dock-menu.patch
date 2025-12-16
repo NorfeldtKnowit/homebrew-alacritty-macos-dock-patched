@@ -13,7 +13,7 @@ index 37996c29..84836879 100644
  
  [target.'cfg(windows)'.dependencies]
 diff --git a/alacritty/src/macos/mod.rs b/alacritty/src/macos/mod.rs
-index 90d0fb96..701fa8b5 100644
+index 90d0fb96..f5f6cca3 100644
 --- a/alacritty/src/macos/mod.rs
 +++ b/alacritty/src/macos/mod.rs
 @@ -1,5 +1,12 @@
@@ -30,7 +30,7 @@ index 90d0fb96..701fa8b5 100644
  
  pub mod locale;
  pub mod proc;
-@@ -14,3 +21,80 @@ pub fn disable_autofill() {
+@@ -14,3 +21,94 @@ pub fn disable_autofill() {
          );
      }
  }
@@ -58,6 +58,7 @@ index 90d0fb96..701fa8b5 100644
 +            &self,
 +            _sender: &NSApplication,
 +        ) -> Option<Retained<NSMenu>> {
++            eprintln!("[Dock Menu] applicationDockMenu: called!");
 +            unsafe { create_dock_menu() }
 +        }
 +    }
@@ -65,10 +66,12 @@ index 90d0fb96..701fa8b5 100644
 +
 +// Generate dock menu with window list
 +unsafe fn create_dock_menu() -> Option<Retained<NSMenu>> {
++    eprintln!("[Dock Menu] Creating dock menu...");
 +    let mtm = MainThreadMarker::new()?;
 +    let app = NSApplication::sharedApplication(mtm);
 +
 +    let menu = NSMenu::new(mtm);
++    eprintln!("[Dock Menu] Menu created");
 +
 +    // Add each window as menu item
 +    let windows = app.windows();
@@ -102,12 +105,23 @@ index 90d0fb96..701fa8b5 100644
 +        if let Some(mtm) = MainThreadMarker::new() {
 +            let app = NSApplication::sharedApplication(mtm);
 +
++            eprintln!("[Dock Menu] Initializing dock menu support...");
++
++            // Check if there's already a delegate
++            if let Some(existing) = app.delegate() {
++                eprintln!("[Dock Menu] Found existing delegate: {:?}", existing);
++            } else {
++                eprintln!("[Dock Menu] No existing delegate found");
++            }
++
 +            let delegate = DOCK_MENU_DELEGATE.get_or_init(|| {
++                eprintln!("[Dock Menu] Creating new AlacrittyAppDelegate");
 +                msg_send_id![mtm.alloc::<AlacrittyAppDelegate>(), init]
 +            });
 +
 +            // Set as delegate (will respond to dock menu requests)
 +            app.setDelegate(Some(delegate.as_ref()));
++            eprintln!("[Dock Menu] Delegate set successfully");
 +        }
 +    }
 +}
