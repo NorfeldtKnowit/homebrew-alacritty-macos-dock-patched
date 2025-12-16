@@ -95,8 +95,7 @@ jobs:
 
           gh pr create \
             --title "Update to v${VERSION}" \
-            --body "$PR_BODY" \
-            --label "automated-update" | tee /tmp/pr_url.txt
+            --body "$PR_BODY" | tee /tmp/pr_url.txt
 
           # Extract PR number
           PR_URL=$(cat /tmp/pr_url.txt)
@@ -133,7 +132,6 @@ jobs:
 
           gh issue create \
             --title "⚠️ Formula update failed for v${{ inputs.version }}" \
-            --label "update-failure" \
             --body "$ISSUE_BODY"
         env:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}

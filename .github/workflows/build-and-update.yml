@@ -109,7 +109,6 @@ jobs:
 
           gh issue create \
             --title "🔨 Build failed for v${{ inputs.version }}" \
-            --label "build-failure" \
             --body "$ISSUE_BODY"
         env:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
