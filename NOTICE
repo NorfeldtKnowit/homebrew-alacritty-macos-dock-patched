@@ -1,0 +1,35 @@
+Homebrew Tap: Alacritty macOS Dock Patched
+Copyright 2024-present The homebrew-alacritty-patched Contributors
+
+This product includes software developed by the Alacritty project
+(https://github.com/alacritty/alacritty).
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+MODIFICATIONS
+
+This Homebrew tap includes modifications to Alacritty in the form of a patch
+file (alacritty-dock-menu.patch) that adds macOS dock menu functionality.
+All modifications are documented and publicly available.
+
+UPSTREAM ATTRIBUTION
+
+This tap mirrors and distributes source code from:
+- Alacritty Terminal Emulator (https://github.com/alacritty/alacritty)
+- Original Copyright: The Alacritty Project Developers
+- Original License: Apache License 2.0
+
+For upstream Alacritty license, see:
+https://github.com/alacritty/alacritty/blob/master/LICENSE-APACHE
