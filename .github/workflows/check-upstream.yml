@@ -78,7 +78,7 @@ See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/action
 
           echo "✓ Patch applied successfully to v${VERSION}"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
 
       - name: Trigger build
         if: success() && steps.versions.outputs.has_new == 'true'
@@ -87,4 +87,4 @@ See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/action
             -f version="${{ steps.versions.outputs.version }}"
           echo "✓ Triggered build workflow for v${{ steps.versions.outputs.version }}"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}

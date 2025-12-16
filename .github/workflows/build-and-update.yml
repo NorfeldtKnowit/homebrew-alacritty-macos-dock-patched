@@ -87,7 +87,7 @@ jobs:
             -f sha256="${{ steps.build.outputs.sha256 }}"
           echo "✓ Triggered formula update workflow"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
 
       - name: Create failure issue
         if: failure()
@@ -110,4 +110,4 @@ Build or testing failed for Alacritty v${{ inputs.version }}.
 
 This may require manual intervention to fix the build configuration or dependencies."
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
