@@ -1,18 +1,25 @@
-# Homebrew Tap: Alacritty Patched
+# Homebrew Tap: Alacritty macOS Dock Patched
 
 A Homebrew tap that provides Alacritty with macOS dock menu support, similar to Terminal.app and iTerm2.
+
+## Security Disclaimer
+
+**IMPORTANT**: This patch is NOT independently security-audited. Security relies entirely on the upstream [Alacritty project](https://github.com/alacritty/alacritty). The patch only adds macOS dock menu functionality using Objective-C runtime APIs and does not modify security-sensitive code paths.
+
+Automated updates are enabled by default - PRs are auto-merged after validation checks pass. If you prefer manual review, fork this tap.
 
 ## Features
 
 - **Dock Menu**: Right-click the Alacritty dock icon to see all open windows
-- **Automated Updates**: GitHub Actions automatically detects new Alacritty releases and updates the formula
+- **Automated Updates**: GitHub Actions automatically detects new Alacritty releases, validates patches, builds, and auto-merges updates
 - **Patch Validation**: Tests patch compatibility before building
+- **Zero Maintenance**: Runs hands-off after initial setup
 
 ## Installation
 
 ```bash
-brew tap norfeldt/alacritty-patched
-brew install alacritty-patched
+brew tap norfeldt/alacritty-macos-dock-patched
+brew install alacritty-macos-dock-patched
 ```
 
 ### Using as GUI App
@@ -20,13 +27,13 @@ brew install alacritty-patched
 Create a symlink to Applications:
 
 ```bash
-ln -s /opt/homebrew/opt/alacritty-patched/Alacritty.app /Applications/Alacritty-Patched.app
+ln -s /opt/homebrew/opt/alacritty-macos-dock-patched/Alacritty.app /Applications/Alacritty-Patched.app
 ```
 
 Or launch directly:
 
 ```bash
-open /opt/homebrew/opt/alacritty-patched/Alacritty.app
+open /opt/homebrew/opt/alacritty-macos-dock-patched/Alacritty.app
 ```
 
 ## How It Works
@@ -153,8 +160,8 @@ git diff > ~/repos/homebrew-alacritty-patched/alacritty-dock-menu.patch
 4. Update the formula and test locally:
 
 ```bash
-brew uninstall alacritty-patched
-brew install --build-from-source norfeldt/alacritty-patched/alacritty-patched
+brew uninstall alacritty-macos-dock-patched
+brew install --build-from-source norfeldt/alacritty-macos-dock-patched/alacritty-macos-dock-patched
 ```
 
 ## Development
@@ -162,7 +169,7 @@ brew install --build-from-source norfeldt/alacritty-patched/alacritty-patched
 ### Building Locally
 
 ```bash
-brew install --build-from-source Formula/alacritty-patched.rb
+brew install --build-from-source Formula/alacritty-macos-dock-patched.rb
 ```
 
 ### Testing the Dock Menu
@@ -176,16 +183,16 @@ brew install --build-from-source Formula/alacritty-patched.rb
 ## Repository Structure
 
 ```
-homebrew-alacritty-patched/
+homebrew-alacritty-macos-dock-patched/
 ├── .github/
 │   └── workflows/
-│       ├── check-upstream.yml      # Tier 1: Release detection
-│       ├── build-and-update.yml    # Tier 2: Build and test
-│       └── update-formula.yml      # Tier 3: Formula update
+│       ├── check-upstream.yml                    # Tier 1: Release detection
+│       ├── build-and-update.yml                  # Tier 2: Build and test
+│       └── update-formula.yml                    # Tier 3: Formula update + auto-merge
 ├── Formula/
-│   └── alacritty-patched.rb        # Homebrew formula
-├── alacritty-dock-menu.patch       # Patch file
-└── README.md                       # This file
+│   └── alacritty-macos-dock-patched.rb           # Homebrew formula
+├── alacritty-dock-menu.patch                     # Patch file
+└── README.md                                     # This file
 ```
 
 ## Upstream Contribution
