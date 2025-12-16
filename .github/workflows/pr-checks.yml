@@ -1,0 +1,64 @@
+name: PR Checks
+
+"on":
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-formula:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate formula syntax
+        run: |
+          echo "Validating Homebrew formula..."
+
+          # Check formula file exists
+          if [ ! -f "Formula/alacritty-macos-dock-patched.rb" ]; then
+            echo "ERROR: Formula file not found"
+            exit 1
+          fi
+
+          # Check class name is correct
+          if ! grep -q "class AlacrittyMacosDockPatched < Formula" Formula/alacritty-macos-dock-patched.rb; then
+            echo "ERROR: Formula class name is incorrect"
+            exit 1
+          fi
+
+          # Check required fields are present
+          for field in "desc" "homepage" "url" "sha256" "license"; do
+            if ! grep -q "$field" Formula/alacritty-macos-dock-patched.rb; then
+              echo "ERROR: Missing required field: $field"
+              exit 1
+            fi
+          done
+
+          # Check patch file exists
+          if [ ! -f "alacritty-dock-menu.patch" ]; then
+            echo "ERROR: Patch file not found"
+            exit 1
+          fi
+
+          echo "✓ Formula validation passed"
+
+      - name: Verify version update
+        run: |
+          echo "Checking if this is a version update..."
+
+          # Extract version from formula URL
+          VERSION=$(grep -oE 'tags/v[0-9.]+\.tar\.gz' Formula/alacritty-macos-dock-patched.rb | grep -oE '[0-9.]+' || echo "unknown")
+          echo "Formula version: v${VERSION}"
+
+          # Verify SHA256 is a valid hash (64 hex characters)
+          SHA256=$(grep -oE 'sha256 "[a-f0-9]+"' Formula/alacritty-macos-dock-patched.rb | grep -oE '[a-f0-9]{64}' || echo "")
+
+          if [ -z "$SHA256" ]; then
+            echo "ERROR: Invalid SHA256 hash format"
+            exit 1
+          fi
+
+          echo "SHA256: ${SHA256}"
+          echo "✓ Version update validation passed"
