@@ -8,12 +8,12 @@ class AlacrittyPatched < Formula
   depends_on "rust" => :build
   depends_on "scdoc" => :build
 
-  # Apply patch from tap root
-  def patches
-    "#{tap.path}/alacritty-dock-menu.patch"
-  end
-
   def install
+    # Apply patch before building
+    patch_file = "#{tap.path}/alacritty-dock-menu.patch"
+    ohai "Applying patch: #{patch_file}"
+    system "patch", "-p1", "-i", patch_file
+
     system "make", "app"
     prefix.install "target/release/osx/Alacritty.app"
     bin.install_symlink prefix/"Alacritty.app/Contents/MacOS/alacritty"

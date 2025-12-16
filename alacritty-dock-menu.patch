@@ -13,116 +13,131 @@ index 37996c29..84836879 100644
  
  [target.'cfg(windows)'.dependencies]
 diff --git a/alacritty/src/macos/mod.rs b/alacritty/src/macos/mod.rs
-index 90d0fb96..f5f6cca3 100644
+index 90d0fb96..0a3e33e1 100644
 --- a/alacritty/src/macos/mod.rs
 +++ b/alacritty/src/macos/mod.rs
-@@ -1,5 +1,12 @@
-+use objc2::rc::Retained;
- use objc2::runtime::AnyObject;
--use objc2_foundation::{NSDictionary, NSString, NSUserDefaults, ns_string};
-+use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
-+use objc2_app_kit::{NSApplication, NSApplicationDelegate, NSMenu, NSMenuItem};
-+use objc2_foundation::{
-+    ns_string, MainThreadMarker, NSDictionary, NSObject, NSObjectProtocol, NSString,
-+    NSUserDefaults,
-+};
-+use std::sync::OnceLock;
- 
- pub mod locale;
- pub mod proc;
-@@ -14,3 +21,94 @@ pub fn disable_autofill() {
+@@ -14,3 +14,123 @@ pub fn disable_autofill() {
          );
      }
  }
 +
-+// Store delegate to keep it alive
-+static DOCK_MENU_DELEGATE: OnceLock<Retained<AlacrittyAppDelegate>> = OnceLock::new();
-+
-+// Custom application delegate for dock menu
-+declare_class! {
-+    struct AlacrittyAppDelegate;
-+
-+    unsafe impl ClassType for AlacrittyAppDelegate {
-+        type Super = NSObject;
-+        type Mutability = mutability::MainThreadOnly;
-+        const NAME: &'static str = "AlacrittyAppDelegate";
-+    }
-+
-+    impl DeclaredClass for AlacrittyAppDelegate {}
-+
-+    unsafe impl NSObjectProtocol for AlacrittyAppDelegate {}
-+
-+    unsafe impl NSApplicationDelegate for AlacrittyAppDelegate {
-+        #[method_id(@__retain_semantics Other applicationDockMenu:)]
-+        fn application_dock_menu(
-+            &self,
-+            _sender: &NSApplication,
-+        ) -> Option<Retained<NSMenu>> {
-+            eprintln!("[Dock Menu] applicationDockMenu: called!");
-+            unsafe { create_dock_menu() }
-+        }
-+    }
-+}
-+
-+// Generate dock menu with window list
-+unsafe fn create_dock_menu() -> Option<Retained<NSMenu>> {
-+    eprintln!("[Dock Menu] Creating dock menu...");
-+    let mtm = MainThreadMarker::new()?;
-+    let app = NSApplication::sharedApplication(mtm);
-+
-+    let menu = NSMenu::new(mtm);
-+    eprintln!("[Dock Menu] Menu created");
-+
-+    // Add each window as menu item
-+    let windows = app.windows();
-+    for window in windows.iter() {
-+        if let Some(title) = window.title() {
-+            if !title.is_empty() {
-+                let item = NSMenuItem::new(mtm);
-+                item.setTitle(&title);
-+                item.setTarget(Some(window));
-+                item.setAction(Some(objc2::sel!(makeKeyAndOrderFront:)));
-+                menu.addItem(&item);
-+            }
-+        }
-+    }
-+
-+    // Add separator and "New Window" option
-+    if !windows.is_empty() {
-+        menu.addItem(&NSMenuItem::separatorItem(mtm));
-+    }
-+
-+    let new_item = NSMenuItem::new(mtm);
-+    new_item.setTitle(ns_string!("New Window"));
-+    menu.addItem(&new_item);
-+
-+    Some(menu)
-+}
-+
-+// Public function to initialize dock menu
++// Implement dock menu using Objective-C runtime
 +pub fn setup_dock_menu() {
++    use objc2::ffi::{class_addMethod, object_getClass};
++    use objc2::ffi::sel_registerName;
++    use objc2::{class, msg_send};
++    use std::ffi::CString;
++
 +    unsafe {
-+        if let Some(mtm) = MainThreadMarker::new() {
-+            let app = NSApplication::sharedApplication(mtm);
++        eprintln!("[Alacritty] Setting up dock menu...");
 +
-+            eprintln!("[Dock Menu] Initializing dock menu support...");
++        // Get NSApplication
++        let ns_app_class = class!(NSApplication);
++        let app: *mut AnyObject = msg_send![ns_app_class, sharedApplication];
 +
-+            // Check if there's already a delegate
-+            if let Some(existing) = app.delegate() {
-+                eprintln!("[Dock Menu] Found existing delegate: {:?}", existing);
-+            } else {
-+                eprintln!("[Dock Menu] No existing delegate found");
-+            }
++        // Get the current delegate (set by Winit)
++        let delegate: *mut AnyObject = msg_send![app, delegate];
 +
-+            let delegate = DOCK_MENU_DELEGATE.get_or_init(|| {
-+                eprintln!("[Dock Menu] Creating new AlacrittyAppDelegate");
-+                msg_send_id![mtm.alloc::<AlacrittyAppDelegate>(), init]
-+            });
-+
-+            // Set as delegate (will respond to dock menu requests)
-+            app.setDelegate(Some(delegate.as_ref()));
-+            eprintln!("[Dock Menu] Delegate set successfully");
++        if delegate.is_null() {
++            eprintln!("[Alacritty] No delegate found");
++            return;
 +        }
++
++        // Get the class of the existing delegate
++        let delegate_class = object_getClass(delegate.cast());
++
++        // Add applicationDockMenu: method to the existing delegate class
++        let method_name = CString::new("applicationDockMenu:").unwrap();
++        let sel = sel_registerName(method_name.as_ptr())
++            .expect("Failed to register selector");
++
++        // Method signature: id (self, SEL, id)
++        let types = CString::new("@@:@").unwrap();
++
++        let success = class_addMethod(
++            delegate_class.cast_mut(),
++            sel,
++            std::mem::transmute(application_dock_menu_impl as *const ()),
++            types.as_ptr(),
++        );
++
++        if success.into() {
++            eprintln!("[Alacritty] Dock menu method added successfully!");
++        } else {
++            eprintln!("[Alacritty] Failed to add dock menu method (may already exist)");
++        }
++    }
++}
++
++// C function that implements applicationDockMenu:
++extern "C" fn application_dock_menu_impl(
++    _self: *mut AnyObject,
++    _cmd: *const std::os::raw::c_void,
++    _app: *mut AnyObject,
++) -> *mut AnyObject {
++    use objc2::{class, msg_send, sel};
++
++    unsafe {
++        eprintln!("[Alacritty] applicationDockMenu: called!");
++
++        // Get NSApplication to access windows
++        let ns_app_class = class!(NSApplication);
++        let app: *mut AnyObject = msg_send![ns_app_class, sharedApplication];
++
++        // Create menu
++        let ns_menu_class = class!(NSMenu);
++        let menu: *mut AnyObject = msg_send![ns_menu_class, alloc];
++        let menu: *mut AnyObject = msg_send![menu, init];
++
++        // Get windows array
++        let windows: *mut AnyObject = msg_send![app, windows];
++        let count: usize = msg_send![windows, count];
++
++        eprintln!("[Alacritty] Found {} windows", count);
++
++        // Add each window to menu
++        for i in 0..count {
++            let window: *mut AnyObject = msg_send![windows, objectAtIndex: i];
++            let title: *mut AnyObject = msg_send![window, title];
++
++            // Check if title is not empty
++            let length: usize = msg_send![title, length];
++            if length > 0 {
++                // Create menu item
++                let ns_menu_item_class = class!(NSMenuItem);
++                let item: *mut AnyObject = msg_send![ns_menu_item_class, alloc];
++                let item: *mut AnyObject = msg_send![item, init];
++
++                let _: () = msg_send![item, setTitle: title];
++                let _: () = msg_send![item, setTarget: window];
++
++                let selector = sel!(makeKeyAndOrderFront:);
++                let _: () = msg_send![item, setAction: selector];
++
++                let _: () = msg_send![menu, addItem: item];
++
++                eprintln!("[Alacritty] Added window to menu");
++            }
++        }
++
++        // Add separator if we have windows
++        if count > 0 {
++            let separator_class = class!(NSMenuItem);
++            let separator: *mut AnyObject = msg_send![separator_class, separatorItem];
++            let _: () = msg_send![menu, addItem: separator];
++        }
++
++        // Add "New Window" item
++        let ns_menu_item_class = class!(NSMenuItem);
++        let new_item: *mut AnyObject = msg_send![ns_menu_item_class, alloc];
++        let new_item: *mut AnyObject = msg_send![new_item, init];
++
++        let new_window_title = ns_string!("New Window");
++        let _: () = msg_send![new_item, setTitle: new_window_title];
++        let _: () = msg_send![menu, addItem: new_item];
++
++        eprintln!("[Alacritty] Dock menu created successfully");
++        menu
 +    }
 +}
 diff --git a/alacritty/src/main.rs b/alacritty/src/main.rs
