@@ -1,0 +1,127 @@
+diff --git a/alacritty/Cargo.toml b/alacritty/Cargo.toml
+index 37996c29..84836879 100644
+--- a/alacritty/Cargo.toml
++++ b/alacritty/Cargo.toml
+@@ -69,6 +69,9 @@ objc2-app-kit = { version = "0.3.1", default-features = false, features = [
+     "NSResponder",
+     "NSView",
+     "NSWindow",
++    "NSApplication",
++    "NSMenu",
++    "NSMenuItem",
+ ] }
+ 
+ [target.'cfg(windows)'.dependencies]
+diff --git a/alacritty/src/macos/mod.rs b/alacritty/src/macos/mod.rs
+index 90d0fb96..701fa8b5 100644
+--- a/alacritty/src/macos/mod.rs
++++ b/alacritty/src/macos/mod.rs
+@@ -1,5 +1,12 @@
++use objc2::rc::Retained;
+ use objc2::runtime::AnyObject;
+-use objc2_foundation::{NSDictionary, NSString, NSUserDefaults, ns_string};
++use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
++use objc2_app_kit::{NSApplication, NSApplicationDelegate, NSMenu, NSMenuItem};
++use objc2_foundation::{
++    ns_string, MainThreadMarker, NSDictionary, NSObject, NSObjectProtocol, NSString,
++    NSUserDefaults,
++};
++use std::sync::OnceLock;
+ 
+ pub mod locale;
+ pub mod proc;
+@@ -14,3 +21,80 @@ pub fn disable_autofill() {
+         );
+     }
+ }
++
++// Store delegate to keep it alive
++static DOCK_MENU_DELEGATE: OnceLock<Retained<AlacrittyAppDelegate>> = OnceLock::new();
++
++// Custom application delegate for dock menu
++declare_class! {
++    struct AlacrittyAppDelegate;
++
++    unsafe impl ClassType for AlacrittyAppDelegate {
++        type Super = NSObject;
++        type Mutability = mutability::MainThreadOnly;
++        const NAME: &'static str = "AlacrittyAppDelegate";
++    }
++
++    impl DeclaredClass for AlacrittyAppDelegate {}
++
++    unsafe impl NSObjectProtocol for AlacrittyAppDelegate {}
++
++    unsafe impl NSApplicationDelegate for AlacrittyAppDelegate {
++        #[method_id(@__retain_semantics Other applicationDockMenu:)]
++        fn application_dock_menu(
++            &self,
++            _sender: &NSApplication,
++        ) -> Option<Retained<NSMenu>> {
++            unsafe { create_dock_menu() }
++        }
++    }
++}
++
++// Generate dock menu with window list
++unsafe fn create_dock_menu() -> Option<Retained<NSMenu>> {
++    let mtm = MainThreadMarker::new()?;
++    let app = NSApplication::sharedApplication(mtm);
++
++    let menu = NSMenu::new(mtm);
++
++    // Add each window as menu item
++    let windows = app.windows();
++    for window in windows.iter() {
++        if let Some(title) = window.title() {
++            if !title.is_empty() {
++                let item = NSMenuItem::new(mtm);
++                item.setTitle(&title);
++                item.setTarget(Some(window));
++                item.setAction(Some(objc2::sel!(makeKeyAndOrderFront:)));
++                menu.addItem(&item);
++            }
++        }
++    }
++
++    // Add separator and "New Window" option
++    if !windows.is_empty() {
++        menu.addItem(&NSMenuItem::separatorItem(mtm));
++    }
++
++    let new_item = NSMenuItem::new(mtm);
++    new_item.setTitle(ns_string!("New Window"));
++    menu.addItem(&new_item);
++
++    Some(menu)
++}
++
++// Public function to initialize dock menu
++pub fn setup_dock_menu() {
++    unsafe {
++        if let Some(mtm) = MainThreadMarker::new() {
++            let app = NSApplication::sharedApplication(mtm);
++
++            let delegate = DOCK_MENU_DELEGATE.get_or_init(|| {
++                msg_send_id![mtm.alloc::<AlacrittyAppDelegate>(), init]
++            });
++
++            // Set as delegate (will respond to dock menu requests)
++            app.setDelegate(Some(delegate.as_ref()));
++        }
++    }
++}
+diff --git a/alacritty/src/main.rs b/alacritty/src/main.rs
+index 54de44bc..3c7b6363 100644
+--- a/alacritty/src/main.rs
++++ b/alacritty/src/main.rs
+@@ -183,6 +183,9 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
+     #[cfg(target_os = "macos")]
+     macos::disable_autofill();
+ 
++    #[cfg(target_os = "macos")]
++    macos::setup_dock_menu();
++
+     // Create the IPC socket listener.
+     #[cfg(unix)]
+     let socket_path = if config.ipc_socket() {
