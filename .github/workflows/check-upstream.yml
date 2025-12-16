@@ -1,6 +1,6 @@
 name: Check Upstream Releases
 
-on:
+"on":
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
@@ -43,27 +43,32 @@ jobs:
           # Dry-run test
           if ! patch -p1 --dry-run < ../alacritty-dock-menu.patch; then
             echo "Patch failed to apply to v${VERSION}"
+
+            # Create issue body with proper escaping
+            ISSUE_BODY="## Patch Compatibility Failure
+
+          The alacritty-dock-menu.patch failed to apply to Alacritty v${VERSION}.
+
+          This likely means Alacritty has refactored the code that our patch modifies. Manual intervention is required to update the patch.
+
+          ### Files modified by the patch:
+          - alacritty/Cargo.toml
+          - alacritty/src/macos/mod.rs
+          - alacritty/src/main.rs
+
+          ### Next steps:
+          1. Clone Alacritty v${VERSION}
+          2. Manually apply the changes from our patch
+          3. Create a new patch file
+          4. Update the formula
+
+          See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+
             gh issue create \
               --title "⚠️ Patch incompatible with v${VERSION}" \
               --label "patch-failure" \
-              --body "## Patch Compatibility Failure
+              --body "$ISSUE_BODY"
 
-The alacritty-dock-menu.patch failed to apply to Alacritty v${VERSION}.
-
-This likely means Alacritty has refactored the code that our patch modifies. Manual intervention is required to update the patch.
-
-### Files modified by the patch:
-- alacritty/Cargo.toml
-- alacritty/src/macos/mod.rs
-- alacritty/src/main.rs
-
-### Next steps:
-1. Clone Alacritty v${VERSION}
-2. Manually apply the changes from our patch
-3. Create a new patch file
-4. Update the formula
-
-See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
             exit 1
           fi
 
