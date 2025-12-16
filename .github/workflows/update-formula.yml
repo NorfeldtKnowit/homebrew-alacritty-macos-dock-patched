@@ -104,6 +104,7 @@ jobs:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
 
       - name: Enable auto-merge
+        continue-on-error: true
         run: |
           # Enable auto-merge with squash strategy
           gh pr merge "${{ steps.create_pr.outputs.pr_url }}" --auto --squash
