@@ -92,22 +92,24 @@ jobs:
       - name: Create failure issue
         if: failure()
         run: |
+          ISSUE_BODY="## Build Failure
+
+          Build or testing failed for Alacritty v${{ inputs.version }}.
+
+          ### Workflow Details
+          - **Run ID**: ${{ github.run_id }}
+          - **Logs**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ### Next Steps
+          1. Review the workflow logs for error details
+          2. Check if Alacritty made breaking changes
+          3. Update the build process if needed
+
+          This may require manual intervention to fix the build configuration or dependencies."
+
           gh issue create \
             --title "🔨 Build failed for v${{ inputs.version }}" \
             --label "build-failure" \
-            --body "## Build Failure
-
-Build or testing failed for Alacritty v${{ inputs.version }}.
-
-### Workflow Details
-- **Run ID**: ${{ github.run_id }}
-- **Logs**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-### Next Steps
-1. Review the workflow logs for error details
-2. Check if Alacritty made breaking changes
-3. Update the build process if needed
-
-This may require manual intervention to fix the build configuration or dependencies."
+            --body "$ISSUE_BODY"
         env:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}

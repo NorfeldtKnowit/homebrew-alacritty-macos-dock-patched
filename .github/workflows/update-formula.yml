@@ -61,39 +61,41 @@ jobs:
           VERSION="${{ inputs.version }}"
           SHA256="${{ inputs.sha256 }}"
 
+          PR_BODY="## Automated Update
+
+          **Version:** v${VERSION}
+          **SHA256:** \`${SHA256}\`
+
+          ### Validation
+
+          - ✓ Patch applied successfully
+          - ✓ Build completed (macOS)
+          - ✓ Binary tests passed
+          - ✓ Dock menu implementation verified
+
+          ### Security Note
+
+          This patch is NOT independently security-audited. Security relies entirely on the upstream Alacritty project. The patch only adds macOS dock menu functionality and does not modify security-sensitive code paths.
+
+          ### Test Locally
+
+          \`\`\`bash
+          brew uninstall alacritty-macos-dock-patched
+          brew install --build-from-source norfeldt/alacritty-macos-dock-patched/alacritty-macos-dock-patched
+          \`\`\`
+
+          ### Verify Dock Menu
+
+          1. Launch the patched Alacritty
+          2. Open multiple windows
+          3. Right-click the dock icon
+          4. Confirm all windows appear in the dock menu
+
+          This PR will auto-merge after all checks pass."
+
           gh pr create \
             --title "Update to v${VERSION}" \
-            --body "## Automated Update
-
-**Version:** v${VERSION}
-**SHA256:** \`${SHA256}\`
-
-### Validation
-
-- ✓ Patch applied successfully
-- ✓ Build completed (macOS)
-- ✓ Binary tests passed
-- ✓ Dock menu implementation verified
-
-### Security Note
-
-This patch is NOT independently security-audited. Security relies entirely on the upstream Alacritty project. The patch only adds macOS dock menu functionality and does not modify security-sensitive code paths.
-
-### Test Locally
-
-\`\`\`bash
-brew uninstall alacritty-macos-dock-patched
-brew install --build-from-source norfeldt/alacritty-macos-dock-patched/alacritty-macos-dock-patched
-\`\`\`
-
-### Verify Dock Menu
-
-1. Launch the patched Alacritty
-2. Open multiple windows
-3. Right-click the dock icon
-4. Confirm all windows appear in the dock menu
-
-This PR will auto-merge after all checks pass." \
+            --body "$PR_BODY" \
             --label "automated-update" | tee /tmp/pr_url.txt
 
           # Extract PR number
@@ -113,23 +115,25 @@ This PR will auto-merge after all checks pass." \
       - name: Create failure issue
         if: failure()
         run: |
+          ISSUE_BODY="## Formula Update Failure
+
+          Failed to update formula for Alacritty v${{ inputs.version }}.
+
+          ### Workflow Details
+          - **Run ID**: ${{ github.run_id }}
+          - **Logs**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - **SHA256**: \`${{ inputs.sha256 }}\`
+
+          ### Possible Causes
+          - Git configuration issues
+          - Permission problems
+          - Formula syntax errors
+
+          This requires manual intervention to complete the update."
+
           gh issue create \
             --title "⚠️ Formula update failed for v${{ inputs.version }}" \
             --label "update-failure" \
-            --body "## Formula Update Failure
-
-Failed to update formula for Alacritty v${{ inputs.version }}.
-
-### Workflow Details
-- **Run ID**: ${{ github.run_id }}
-- **Logs**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-- **SHA256**: \`${{ inputs.sha256 }}\`
-
-### Possible Causes
-- Git configuration issues
-- Permission problems
-- Formula syntax errors
-
-This requires manual intervention to complete the update."
+            --body "$ISSUE_BODY"
         env:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN || github.token }}
