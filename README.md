@@ -55,9 +55,49 @@ The patch modifies three files:
 - `alacritty/src/macos/mod.rs` - Implements dock menu (~120 lines)
 - `alacritty/src/main.rs` - Calls `setup_dock_menu()` on startup
 
+## Security Architecture
+
+This tap uses **GitHub Release Assets** to provide stable SHA256 checksums and transparent source verification:
+
+### How Source Distribution Works
+
+1. **Upstream Download**: When a new Alacritty version is detected, the automation downloads the official tarball from the [Alacritty GitHub repository](https://github.com/alacritty/alacritty)
+2. **SHA256 Calculation**: The checksum is calculated before any modifications
+3. **Release Asset Upload**: The tarball is uploaded to this repository's [GitHub Releases](https://github.com/NorfeldtKnowit/homebrew-alacritty-macos-dock-patched/releases) as an immutable asset
+4. **Formula Update**: The Homebrew formula is updated to reference the release asset URL
+5. **User Verification**: When users install, Homebrew verifies the SHA256 checksum
+
+### Why Release Assets?
+
+GitHub's auto-generated source tarballs are **non-deterministic** - they can be regenerated with different SHA256 hashes even for the same version tag. This causes installation failures when checksums don't match.
+
+By mirroring upstream sources as GitHub Release Assets:
+
+- **Permanent Stability**: SHA256 never changes after upload (GitHub guarantees immutability)
+- **Clear Attribution**: Every release documents the upstream Alacritty version and source URL
+- **Independent Verification**: Users can verify checksums manually:
+
+```bash
+# Download release asset
+curl -sL "https://github.com/NorfeldtKnowit/homebrew-alacritty-macos-dock-patched/releases/download/v0.16.1/alacritty-v0.16.1.tar.gz" | shasum -a 256
+
+# Should output: b7240df4a52c004470977237a276185fc97395d59319480d67cad3c4347f395e
+```
+
+### Security Verification Process
+
+Every release includes:
+
+- **Upstream Attribution**: Direct link to the official Alacritty release
+- **SHA256 Checksum**: Calculated and verified before upload
+- **Build Validation**: macOS build completed successfully with all tests passed
+- **Patch Compatibility**: Documented whether the patch applied cleanly
+
+See [SECURITY.md](SECURITY.md) for detailed verification steps.
+
 ## Automated Updates
 
-This tap uses a three-tier GitHub Actions workflow to handle updates automatically:
+This tap uses a four-tier GitHub Actions workflow to handle updates automatically:
 
 ### Workflow Architecture
 
@@ -71,12 +111,20 @@ Tier 2: Build (20-25 min)
   ├─ Download and apply patch
   ├─ Build with 'make app'
   ├─ Test binary execution
-  └─ Trigger formula update if successful
+  └─ Trigger release asset upload if successful
 
-Tier 3: Update (3-5 min)
-  ├─ Update formula version/SHA256
-  ├─ Create PR with test results
-  └─ Ready for manual review and merge
+Tier 3: Release Asset Upload (2-3 min)
+  ├─ Download upstream tarball
+  ├─ Verify SHA256 matches build-time calculation
+  ├─ Create GitHub release with documentation
+  ├─ Upload tarball as immutable asset
+  └─ Trigger formula update
+
+Tier 4: Update (3-5 min)
+  ├─ Update formula to reference release asset URL
+  ├─ Verify asset accessibility
+  ├─ Create PR with validation results
+  └─ Auto-merge after checks pass
 ```
 
 ### Setup Requirements (for maintainers)
@@ -191,12 +239,19 @@ homebrew-alacritty-macos-dock-patched/
 │   └── workflows/
 │       ├── check-upstream.yml                    # Tier 1: Release detection
 │       ├── build-and-update.yml                  # Tier 2: Build and test
-│       └── update-formula.yml                    # Tier 3: Formula update + auto-merge
+│       ├── release-asset-upload.yml              # Tier 3: Release asset creation
+│       └── update-formula.yml                    # Tier 4: Formula update + auto-merge
 ├── Formula/
 │   └── alacritty-macos-dock-patched.rb           # Homebrew formula
 ├── alacritty-dock-menu.patch                     # Patch file
+├── SECURITY.md                                   # Security verification guide
+├── CONTRIBUTING.md                               # Workflow documentation for contributors
 └── README.md                                     # This file
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed workflow documentation and development guide.
 
 ## Upstream Contribution
 
