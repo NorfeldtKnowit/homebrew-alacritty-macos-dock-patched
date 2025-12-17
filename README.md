@@ -264,4 +264,10 @@ Relevant upstream issues:
 
 ## License
 
-This tap follows Alacritty's Apache 2.0 license. The patch is a derivative work of Alacritty.
+This tap is licensed under the Apache License 2.0, matching upstream Alacritty.
+
+- **License**: Apache 2.0 - See [LICENSE](LICENSE) file
+- **Attribution**: See [NOTICE](NOTICE) file for upstream attribution
+- **Upstream**: [Alacritty License](https://github.com/alacritty/alacritty/blob/master/LICENSE-APACHE)
+
+The patch (`alacritty-dock-menu.patch`) is a derivative work of Alacritty and is distributed under the same Apache 2.0 license.

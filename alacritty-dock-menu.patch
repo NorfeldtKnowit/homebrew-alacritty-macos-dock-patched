@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright: Derivative work of Alacritty (https://github.com/alacritty/alacritty)
+#
+
 diff --git a/alacritty/Cargo.toml b/alacritty/Cargo.toml
 index 37996c29..84836879 100644
 --- a/alacritty/Cargo.toml
