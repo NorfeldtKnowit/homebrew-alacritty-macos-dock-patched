@@ -14,8 +14,7 @@ jobs:
       - name: Get versions
         id: versions
         run: |
-          CURRENT=$(grep -oE 'url ".*\/v[0-9.]+\.tar\.gz"' Formula/alacritty-macos-dock-patched.rb | grep -oE '[0-9.]+')
-          brew install gh
+          CURRENT=$(grep -oE '/download/v[0-9.]+/' Formula/alacritty-macos-dock-patched.rb | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           LATEST=$(gh api repos/alacritty/alacritty/releases/latest --jq '.tag_name' | sed 's/^v//')
 
           echo "Current version: $CURRENT"

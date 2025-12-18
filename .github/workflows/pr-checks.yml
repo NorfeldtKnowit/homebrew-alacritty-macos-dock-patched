@@ -49,7 +49,7 @@ jobs:
           echo "Checking if this is a version update..."
 
           # Extract version from formula URL
-          VERSION=$(grep -oE 'tags/v[0-9.]+\.tar\.gz' Formula/alacritty-macos-dock-patched.rb | grep -oE '[0-9.]+' || echo "unknown")
+          VERSION=$(grep -oE '/download/v[0-9.]+/' Formula/alacritty-macos-dock-patched.rb | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
           echo "Formula version: v${VERSION}"
 
           # Verify SHA256 is a valid hash (64 hex characters)
